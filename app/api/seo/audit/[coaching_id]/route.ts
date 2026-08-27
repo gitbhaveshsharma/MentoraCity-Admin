@@ -1,0 +1,6 @@
+import { NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+import { DEFAULT_OG } from "@/lib/types";
+import { isAdmin } from "@/lib/auth/admin";
+
+export async function GET(_request: Request, { params }: { params: Promise<{ coaching_id: string }> }) { const supabase = await createClient(); const { data: { user } } = await supabase.auth.getUser(); if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 }); if (!(await isAdmin(supabase, user))) return NextResponse.json({ error: "Forbidden" }, { status: 403 }); const { coaching_id } = await params; const { data: center } = await supabase.from("coaching_centers").select("id,name,metadata").eq("id", coaching_id).single(); if (!center) return NextResponse.json({ error: "Not found" }, { status: 404 }); const seo = center.metadata?.seo ?? {}; return NextResponse.json({ id: center.id, name: center.name, fields: { title: seo.title?.custom ? "ok" : "generated", description: seo.description?.custom ? "ok" : "generated", canonical: seo.canonical_url ? "ok" : "missing", og_image: seo.og?.image && seo.og.image !== DEFAULT_OG ? "ok" : "missing", robots: seo.robots?.index ? "ok" : "invalid", schema: seo.schema && Object.keys(seo.schema).length ? "ok" : "missing" } }); }

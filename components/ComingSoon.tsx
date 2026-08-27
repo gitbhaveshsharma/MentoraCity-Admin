@@ -1,0 +1,1 @@
+export function ComingSoon({ title, description }: { title: string; description: string }) { return <main className="content"><div className="card coming-soon"><span className="badge badge-source">Coming soon</span><h1 className="page-title" style={{ marginTop: 14 }}>{title}</h1><p className="page-sub">{description}</p></div></main>; }

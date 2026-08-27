@@ -1,0 +1,1 @@
+export default function UnauthorizedPage() { return <main className="login-wrap"><div className="login-card"><span className="badge badge-muted">403 · Restricted</span><h1>Admin access required</h1><p>Your account is authenticated, but it does not have the admin role needed for this workspace.</p><a className="btn btn-ghost" href="/login">Back to sign in</a></div></main>; }
