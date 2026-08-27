@@ -21,7 +21,8 @@ export async function POST(request: Request) {
   const { data: entity, error: entityError } = await production.from(table).select(columns).eq("id", input.entity_id).single();
   if (!entity) return NextResponse.json({ error: entityError?.message ?? "Production entity not found" }, { status: 404 });
 
-  const pageUrl = normalizeSeo(entity.metadata, entity.name, entity.metadata?.seo?.canonical_url ?? `${process.env.PUBLIC_SITE_URL ?? ""}/${input.entity_type}/${entity.slug ?? entity.branch_slug ?? entity.id}`).canonical_url;
+  const entitySlug = (entity as { slug?: string; branch_slug?: string }).slug ?? (entity as { branch_slug?: string }).branch_slug ?? entity.id;
+  const pageUrl = normalizeSeo(entity.metadata, entity.name, entity.metadata?.seo?.canonical_url ?? `${process.env.PUBLIC_SITE_URL ?? ""}/${input.entity_type}/${entitySlug}`).canonical_url;
   let auditDb: ReturnType<typeof createAuditClient>;
   try { auditDb = createAuditClient(); } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Audit database is not configured" }, { status: 503 }); }
   const { data: previous } = await auditDb.from("seo_audits").select("id,score_total").eq("entity_type", input.entity_type).eq("entity_id", input.entity_id).eq("status", "COMPLETED").order("triggered_at", { ascending: false }).limit(1).maybeSingle();
