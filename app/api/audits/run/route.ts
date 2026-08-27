@@ -17,8 +17,9 @@ export async function POST(request: Request) {
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   const input = parsed.data;
   const table = input.entity_type === "center" ? "coaching_centers" : "coaching_branches";
-  const { data: entity } = await production.from(table).select("id,name,slug,branch_slug,metadata").eq("id", input.entity_id).single();
-  if (!entity) return NextResponse.json({ error: "Production entity not found" }, { status: 404 });
+  const columns = input.entity_type === "center" ? "id,name,slug,metadata" : "id,name,branch_slug,metadata";
+  const { data: entity, error: entityError } = await production.from(table).select(columns).eq("id", input.entity_id).single();
+  if (!entity) return NextResponse.json({ error: entityError?.message ?? "Production entity not found" }, { status: 404 });
 
   const pageUrl = normalizeSeo(entity.metadata, entity.name, entity.metadata?.seo?.canonical_url ?? `${process.env.PUBLIC_SITE_URL ?? ""}/${input.entity_type}/${entity.slug ?? entity.branch_slug ?? entity.id}`).canonical_url;
   let auditDb: ReturnType<typeof createAuditClient>;
