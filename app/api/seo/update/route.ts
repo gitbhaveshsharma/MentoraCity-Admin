@@ -15,7 +15,21 @@ export async function POST(request: Request) {
   if (!entity && table === "coaching_branches") { table = "coaching_centers"; const result = await supabase.from(table).select("metadata").eq("id", body.id).single(); entity = result.data; readError = result.error; }
   if (readError || !entity) return NextResponse.json({ error: readError?.message ?? "Not found" }, { status: 404 });
   const metadata = { ...(entity.metadata ?? {}), seo: { ...(entity.metadata?.seo ?? {}), ...body.seo, version: Number(entity.metadata?.seo?.version ?? 0) + 1 } };
-  const { error: updateError } = await supabase.from(table).update({ metadata }).eq("id", body.id);
+  const canonical = typeof body.seo.canonical_url === "string" ? body.seo.canonical_url : null;
+  let nextSlug: string | null = null;
+  if (canonical) {
+    try {
+      const url = new URL(canonical);
+      const segment = url.pathname.split("/").filter(Boolean).at(-1) ?? "";
+      nextSlug = decodeURIComponent(segment).toLowerCase();
+    } catch {
+      return NextResponse.json({ error: "Canonical URL must be valid before saving." }, { status: 400 });
+    }
+    if (!/^[a-z0-9][a-z0-9-]*$/.test(nextSlug)) return NextResponse.json({ error: "The canonical URL must end with a valid slug." }, { status: 400 });
+  }
+  const updates: Record<string, unknown> = { metadata };
+  if (nextSlug) updates[table === "coaching_centers" ? "slug" : "branch_slug"] = nextSlug;
+  const { error: updateError } = await supabase.from(table).update(updates).eq("id", body.id);
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 });
   return NextResponse.json({ seo: metadata.seo });
 }

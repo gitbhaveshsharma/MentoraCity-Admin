@@ -420,3 +420,15 @@ body:has(.table-card) .page-head > .btn-primary { display: none; }
 .yellow { background: var(--color-warning); }
 .red { background: var(--color-error); }
 
+
+/* SEO editor controls */
+.textarea { display:block; width:100%; min-height:90px; resize:vertical; border:1px solid #dfe3e7; border-radius:8px; padding:10px 11px; outline:none; color:var(--ink); background:#fff; font:inherit; font-size:13px; line-height:1.45; }
+.textarea:focus { border-color:#f4a16f; box-shadow:0 0 0 3px #fff1e8; }
+.textarea[readonly] { background:#f5f6f7; color:#7c8792; }
+.field-help { display:block; margin-top:5px; color:#9aa3ad; font-size:10px; line-height:1.4; }
+.alert { position:relative; margin-bottom:14px; padding:12px 13px 12px 38px; border:1px solid #f5d0b5; border-radius:9px; background:#fff8f2; color:#8e522e; }
+.alert:before { content:"!"; position:absolute; top:12px; left:13px; display:grid; width:17px; height:17px; place-items:center; border-radius:50%; background:#f7a269; color:#fff; font-size:11px; font-weight:700; }
+.alert-title { margin:0; color:#8e522e; font-size:11px; font-weight:700; }
+.alert-description { margin:4px 0 0; color:#9b6a4a; font-size:10px; line-height:1.5; }
+.canonical-alert { margin-bottom:12px; }
+.schema-editor { min-height:190px; color:#43566b; background:#fbfcfd; font:11px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace; }
