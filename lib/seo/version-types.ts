@@ -123,3 +123,88 @@ export function asSeoPayload(value: unknown): SeoPayload | null {
   if (typeof seo.version !== "number") return null;
   return seo;
 }
+
+export type SeoFieldCompareRow = {
+  field: SeoVersionTrackedField;
+  changed: boolean;
+  before: string;
+  after: string;
+};
+
+function formatSeoFieldValue(
+  seo: Record<string, unknown> | null | undefined,
+  field: SeoVersionTrackedField,
+): string {
+  if (!seo) return "—";
+  const value = seo[field];
+  if (value == null) return "—";
+
+  if (field === "title" || field === "description") {
+    const block = value as {
+      source?: string;
+      custom?: string | null;
+      generated?: string;
+    };
+    const text =
+      block.source === "custom" && block.custom?.trim()
+        ? block.custom
+        : (block.generated ?? "");
+    const source = block.source ?? "generated";
+    return text ? `[${source}] ${text}` : `[${source}] —`;
+  }
+
+  if (field === "canonical_url") return String(value);
+
+  if (field === "robots") {
+    const robots = value as { index?: boolean; follow?: boolean };
+    return `index=${String(robots.index ?? false)}, follow=${String(robots.follow ?? false)}`;
+  }
+
+  if (field === "og" || field === "twitter") {
+    const social = value as {
+      title?: string;
+      description?: string;
+      image?: string;
+    };
+    return [
+      social.title ? `title: ${social.title}` : null,
+      social.description ? `description: ${social.description}` : null,
+      social.image ? `image: ${social.image}` : null,
+    ]
+      .filter(Boolean)
+      .join("\n") || "—";
+  }
+
+  if (field === "schema") {
+    try {
+      return JSON.stringify(value, null, 2);
+    } catch {
+      return String(value);
+    }
+  }
+
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
+
+/** Builds a before/after compare table for a version snapshot. */
+export function buildSeoVersionCompare(
+  previous: Record<string, unknown> | null | undefined,
+  next: Record<string, unknown> | null | undefined,
+  changedFields?: string[] | null,
+): SeoFieldCompareRow[] {
+  const changed = new Set(
+    changedFields?.length
+      ? changedFields
+      : diffSeoFields(previous, next),
+  );
+  return SEO_VERSION_TRACKED_FIELDS.map((field) => ({
+    field,
+    changed: changed.has(field),
+    before: formatSeoFieldValue(previous, field),
+    after: formatSeoFieldValue(next, field),
+  }));
+}

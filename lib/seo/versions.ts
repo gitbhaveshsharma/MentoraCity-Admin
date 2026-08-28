@@ -18,6 +18,7 @@ export {
   SEO_VERSION_RETENTION_DAYS,
   SEO_VERSION_TRACKED_FIELDS,
   asSeoPayload,
+  buildSeoVersionCompare,
   computeExpiresAt,
   daysUntilExpiry,
   diffSeoFields,
@@ -25,6 +26,7 @@ export {
 } from "@/lib/seo/version-types";
 export type {
   RecordSeoVersionInput,
+  SeoFieldCompareRow,
   SeoVersionDailyStat,
   SeoVersionEntityType,
   SeoVersionFieldStat,

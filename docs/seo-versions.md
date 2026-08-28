@@ -102,6 +102,16 @@ Version insert failures never fail the production SEO write.
 
 Deep link: `/seo-versions?entity_type=branch&entity_id=<uuid>`.
 
+### Compare (before / after)
+
+On `/seo-versions`, click a history row (or **Compare**) to open a field-level diff:
+
+- **Before** = `previous_seo` at save time  
+- **After** = `seo` written in that version  
+- Changed fields are highlighted; unchanged fields are collapsed under a disclosure  
+
+Restore is available from the compare panel and the table. The edit sheet only lists recent versions and links here for full compare.
+
 ## Code map
 
 | Path | Role |

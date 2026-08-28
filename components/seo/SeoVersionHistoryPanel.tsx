@@ -23,18 +23,6 @@ function formatWhen(value: string) {
   return dateTime.format(new Date(value));
 }
 
-function effectiveTitle(seo: SeoPayload) {
-  return seo.title.source === "custom" && seo.title.custom
-    ? seo.title.custom
-    : seo.title.generated;
-}
-
-function effectiveDescription(seo: SeoPayload) {
-  return seo.description.source === "custom" && seo.description.custom
-    ? seo.description.custom
-    : seo.description.generated;
-}
-
 export function SeoVersionHistoryPanel({
   entityId,
   entityType,
@@ -49,7 +37,6 @@ export function SeoVersionHistoryPanel({
   const [versions, setVersions] = useState<SeoVersionRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [restoringId, setRestoringId] = useState<string | null>(null);
-  const [previewId, setPreviewId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -57,7 +44,7 @@ export function SeoVersionHistoryPanel({
       const params = new URLSearchParams({
         entity_type: entityType,
         entity_id: entityId,
-        limit: "20",
+        limit: "10",
       });
       const response = await fetch(`/api/seo/versions?${params}`);
       if (!response.ok) {
@@ -122,8 +109,8 @@ export function SeoVersionHistoryPanel({
       <Alert className="seo-version-alert">
         <AlertTitle>History expires after {SEO_VERSION_RETENTION_DAYS} days</AlertTitle>
         <AlertDescription>
-          Every SEO save creates a snapshot you can restore. Snapshots older than{" "}
-          {SEO_VERSION_RETENTION_DAYS} days are deleted automatically.
+          Snapshots older than {SEO_VERSION_RETENTION_DAYS} days are deleted
+          automatically. Open the SEO versions page to compare before/after changes.
         </AlertDescription>
       </Alert>
 
@@ -141,7 +128,6 @@ export function SeoVersionHistoryPanel({
             <span role="columnheader">Actions</span>
           </div>
           {versions.map((version) => {
-            const previewOpen = previewId === version.id;
             const daysLeft = daysUntilExpiry(version.expires_at);
             return (
               <div key={version.id} className="seo-version-block">
@@ -161,15 +147,6 @@ export function SeoVersionHistoryPanel({
                     <button
                       type="button"
                       className="btn btn-ghost btn-sm"
-                      onClick={() =>
-                        setPreviewId(previewOpen ? null : version.id)
-                      }
-                    >
-                      {previewOpen ? "Hide" : "Preview"}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-sm"
                       disabled={restoringId === version.id}
                       onClick={() => void restore(version)}
                     >
@@ -177,23 +154,6 @@ export function SeoVersionHistoryPanel({
                     </button>
                   </span>
                 </div>
-                {previewOpen && (
-                  <div className="seo-version-preview">
-                    <p>
-                      <b>Title</b> {effectiveTitle(version.seo)}
-                    </p>
-                    <p>
-                      <b>Description</b> {effectiveDescription(version.seo)}
-                    </p>
-                    <p>
-                      <b>Canonical</b> {version.seo.canonical_url}
-                    </p>
-                    <p>
-                      <b>Robots</b> index={String(version.seo.robots.index)},
-                      follow={String(version.seo.robots.follow)}
-                    </p>
-                  </div>
-                )}
               </div>
             );
           })}
@@ -201,7 +161,7 @@ export function SeoVersionHistoryPanel({
       )}
 
       <Link className="seo-version-link" href={historyHref}>
-        Open full history dashboard →
+        Compare versions on SEO versions page →
       </Link>
     </div>
   );

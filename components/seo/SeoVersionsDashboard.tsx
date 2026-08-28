@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { SeoVersionCompare } from "@/components/seo/SeoVersionCompare";
 import {
   SEO_VERSION_RETENTION_DAYS,
   daysUntilExpiry,
@@ -191,6 +192,7 @@ export function SeoVersionsDashboard() {
   );
   const [restoringId, setRestoringId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
 
   const loadStats = useCallback(async () => {
     const response = await fetch("/api/seo/versions/stats");
@@ -267,6 +269,11 @@ export function SeoVersionsDashboard() {
     });
   }, [versions, query]);
 
+  const selectedVersion = useMemo(
+    () => versions.find((version) => version.id === selectedVersionId) ?? null,
+    [versions, selectedVersionId],
+  );
+
   const restore = async (version: SeoVersionRow) => {
     const confirmed = window.confirm(
       `Restore “${version.entity_name ?? version.entity_id}” to version ${version.version_number}? A new snapshot will be recorded.`,
@@ -287,6 +294,7 @@ export function SeoVersionsDashboard() {
       toast.success("SEO restored", {
         description: `Version ${version.version_number} applied.`,
       });
+      setSelectedVersionId(null);
       await Promise.all([loadStats(), loadVersions()]);
     } catch (error) {
       toast.error("Restore failed", {
@@ -353,6 +361,15 @@ export function SeoVersionsDashboard() {
         <FieldBreakdown fields={stats?.field_breakdown ?? []} />
       </div>
 
+      {selectedVersion && (
+        <SeoVersionCompare
+          version={selectedVersion}
+          restoring={restoringId === selectedVersion.id}
+          onClose={() => setSelectedVersionId(null)}
+          onRestore={() => void restore(selectedVersion)}
+        />
+      )}
+
       <section className="card versions-table-card">
         <div className="section-heading" style={{ margin: 0 }}>
           <div>
@@ -360,7 +377,7 @@ export function SeoVersionsDashboard() {
             <p className="section-sub">
               {loading
                 ? "Loading…"
-                : `${visible.length} snapshot${visible.length === 1 ? "" : "s"}`}
+                : `${visible.length} snapshot${visible.length === 1 ? "" : "s"} · click a row to compare before / after`}
             </p>
           </div>
         </div>
@@ -418,45 +435,76 @@ export function SeoVersionsDashboard() {
               <span>Expires</span>
               <span />
             </div>
-            {visible.map((version) => (
-              <div className="versions-table-row" role="row" key={version.id}>
-                <span>{formatWhen(version.created_at)}</span>
-                <span>
-                  <b>{version.entity_name ?? "Untitled"}</b>
-                  <small className="seo-version-meta">
-                    {version.entity_type}
-                  </small>
-                </span>
-                <span>v{version.version_number}</span>
-                <span title={version.change_summary ?? undefined}>
-                  {version.change_summary ?? "—"}
-                </span>
-                <span>
-                  <span className="badge badge-muted">{version.source}</span>
-                </span>
-                <span>{daysUntilExpiry(version.expires_at)}d</span>
-                <span className="versions-row-actions">
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-sm"
-                    disabled={restoringId === version.id}
-                    onClick={() => void restore(version)}
-                  >
-                    {restoringId === version.id ? "Restoring…" : "Restore"}
-                  </button>
-                  <Link
-                    className="btn btn-ghost btn-sm"
-                    href={
-                      version.entity_type === "center"
-                        ? `/coachings/${version.entity_id}`
-                        : `/coachings`
+            {visible.map((version) => {
+              const selected = selectedVersionId === version.id;
+              return (
+                <div
+                  className={`versions-table-row ${selected ? "selected" : ""}`}
+                  role="row"
+                  key={version.id}
+                  tabIndex={0}
+                  onClick={() =>
+                    setSelectedVersionId(selected ? null : version.id)
+                  }
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      setSelectedVersionId(selected ? null : version.id);
                     }
+                  }}
+                  aria-selected={selected}
+                >
+                  <span>{formatWhen(version.created_at)}</span>
+                  <span>
+                    <b>{version.entity_name ?? "Untitled"}</b>
+                    <small className="seo-version-meta">
+                      {version.entity_type}
+                    </small>
+                  </span>
+                  <span>v{version.version_number}</span>
+                  <span title={version.change_summary ?? undefined}>
+                    {version.change_summary ?? "—"}
+                  </span>
+                  <span>
+                    <span className="badge badge-muted">{version.source}</span>
+                  </span>
+                  <span>{daysUntilExpiry(version.expires_at)}d</span>
+                  <span
+                    className="versions-row-actions"
+                    onClick={(event) => event.stopPropagation()}
+                    onKeyDown={(event) => event.stopPropagation()}
                   >
-                    Open
-                  </Link>
-                </span>
-              </div>
-            ))}
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      onClick={() =>
+                        setSelectedVersionId(selected ? null : version.id)
+                      }
+                    >
+                      {selected ? "Hide" : "Compare"}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      disabled={restoringId === version.id}
+                      onClick={() => void restore(version)}
+                    >
+                      {restoringId === version.id ? "Restoring…" : "Restore"}
+                    </button>
+                    <Link
+                      className="btn btn-ghost btn-sm"
+                      href={
+                        version.entity_type === "center"
+                          ? `/coachings/${version.entity_id}`
+                          : `/coachings`
+                      }
+                    >
+                      Open
+                    </Link>
+                  </span>
+                </div>
+              );
+            })}
           </div>
         )}
       </section>
