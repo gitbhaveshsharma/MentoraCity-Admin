@@ -10,6 +10,8 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
+    "@radix-ui/react-select": "^2.3.7",
+    "@radix-ui/react-tooltip": "^1.2.16",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.45.4",
     "googleapis": "^144.0.0",
