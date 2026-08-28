@@ -1,5 +1,62 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isAdmin } from "@/lib/auth/admin";
+import { applySeoToProduction, loadProductionSeoEntity } from "@/lib/seo/apply";
+import { recordSeoVersion } from "@/lib/seo/versions";
+import type { SeoVersionEntityType } from "@/lib/seo/version-types";
 
-export async function POST(request: Request) { const supabase = await createClient(); const { data: { user } } = await supabase.auth.getUser(); if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 }); if (!(await isAdmin(supabase, user))) return NextResponse.json({ error: "Forbidden" }, { status: 403 }); const body = await request.json().catch(() => null) as { ids?: string[]; patch?: Record<string, unknown>; type?: "center" | "branch" } | null; if (!body?.ids?.length || !body.patch) return NextResponse.json({ error: "ids and patch are required" }, { status: 400 }); const table = body.type === "branch" ? "coaching_branches" : "coaching_centers"; const { data, error } = await supabase.from(table).select("id,metadata").in("id", body.ids); if (error) return NextResponse.json({ error: error.message }, { status: 500 }); for (const row of data ?? []) { const metadata = { ...(row.metadata ?? {}), seo: { ...(row.metadata?.seo ?? {}), ...body.patch, version: Number(row.metadata?.seo?.version ?? 0) + 1 } }; const result = await supabase.from(table).update({ metadata }).eq("id", row.id); if (result.error) return NextResponse.json({ error: result.error.message }, { status: 500 }); } return NextResponse.json({ updated: data?.length ?? 0 }); }
+export async function POST(request: Request) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!(await isAdmin(supabase, user))) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const body = (await request.json().catch(() => null)) as {
+    ids?: string[];
+    patch?: Record<string, unknown>;
+    type?: SeoVersionEntityType;
+  } | null;
+
+  if (!body?.ids?.length || !body.patch) {
+    return NextResponse.json({ error: "ids and patch are required" }, { status: 400 });
+  }
+
+  let updated = 0;
+  for (const id of body.ids) {
+    const loaded = await loadProductionSeoEntity(supabase, id, body.type ?? "center");
+    if ("error" in loaded) {
+      return NextResponse.json({ error: loaded.error }, { status: loaded.status });
+    }
+
+    let result;
+    try {
+      result = await applySeoToProduction(supabase, loaded, body.patch);
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : "Could not save SEO" },
+        { status: 400 },
+      );
+    }
+
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: result.status });
+    }
+
+    await recordSeoVersion({
+      entityType: loaded.entityType,
+      entityId: loaded.id,
+      entityName: loaded.name,
+      seo: result.seo,
+      previousSeo: loaded.previousSeo,
+      source: "bulk",
+      createdBy: user.id,
+    });
+    updated += 1;
+  }
+
+  return NextResponse.json({ updated });
+}

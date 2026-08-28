@@ -8,6 +8,7 @@ const logo = "https://ixhlpassuqmqpzpumkuw.supabase.co/storage/v1/object/public/
 const items = [
   { href: "/coachings", icon: "◈", label: "Coaching centers" },
   { href: "/seo-audit", icon: "◌", label: "SEO audit" },
+  { href: "/seo-versions", icon: "⟳", label: "SEO versions" },
   { href: "/content-queue", icon: "◫", label: "Content queue" },
   { href: "/blogs", icon: "▤", label: "Blogs", soon: true },
 ];
