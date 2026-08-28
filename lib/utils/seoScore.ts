@@ -12,8 +12,8 @@ export function seoScore(seo: SeoPayload) {
 }
 
 export function seoHealth(score: number) {
-  if (score >= 90) return { label: "Excellent", color: "#18a66b" };
-  if (score >= 70) return { label: "Good", color: "#3b82f6" };
-  if (score >= 50) return { label: "Needs work", color: "#d99016" };
-  return { label: "Poor", color: "#e05252" };
+  if (score >= 90) return { label: "Excellent", color: "var(--color-success)" };
+  if (score >= 70) return { label: "Good", color: "var(--color-brand-secondary)" };
+  if (score >= 50) return { label: "Needs work", color: "var(--color-warning)" };
+  return { label: "Poor", color: "var(--color-error)" };
 }
