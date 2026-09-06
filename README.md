@@ -20,6 +20,7 @@ Open `/login` and use Supabase email OTP. The middleware requires `role = "A"` i
 - Right-side SEO Sheet with generated/custom title and description controls, live counters, canonical URL, robots toggles, OG/Twitter fields, JSON-LD preview, and schema regeneration.
 - Zod validation, optimistic SEO updates, rollback on API failure, and version bumping.
 - Automatic SEO version snapshots (30-day retention) with restore, sheet history, and `/seo-versions` dashboard — see [docs/seo-versions.md](docs/seo-versions.md).
+- Page-wise SEO overrides (`coaching_seo_overrides`) with Pages + Sitemap workspace, GSC enrichment, and shared versioning — see [docs/page-seo.md](docs/page-seo.md).
 - Supabase-safe `metadata.seo` merge in update, bulk-update, and schema regeneration route handlers.
 - Client-side OG image validator/uploader (`components/seo/OgImageUploader.tsx`) for JPG/PNG/WebP, 500KB limit, and 1200×630 recommendation.
 - Normalized audit-log migration at `supabase/migrations/20260827000000_seo_audit_logs.sql` (13 tables, enums, indexes, and timestamp triggers).
@@ -39,7 +40,9 @@ supabase db push
 
 Set `SEO_AUDIT_SUPABASE_URL` and `SEO_AUDIT_SUPABASE_SERVICE_ROLE_KEY` in the Next.js server environment. The service key is server-only and must never be exposed as a `NEXT_PUBLIC_*` variable. The production Supabase session still protects the dashboard and verifies the admin role before the audit service key is used.
 
-SEO metadata version history also lives in this audit project (`seo_versions`). Apply all migrations including `20260828200000_seo_versions.sql`. Details: [docs/seo-versions.md](docs/seo-versions.md).
+SEO metadata version history also lives in this audit project (`seo_versions`), including `entity_type = page` for path overrides. Apply audit migrations including `20260906000000_seo_versions_allow_page.sql`. Details: [docs/seo-versions.md](docs/seo-versions.md) and [docs/page-seo.md](docs/page-seo.md).
+
+`coaching_seo_overrides` (page SEO) lives in the **audit** Supabase project (`SEO_AUDIT_SUPABASE_URL`), alongside versions and audit targets. See [docs/page-seo.md](docs/page-seo.md).
 
 For GSC, create a Google Cloud service account, grant its email access to the verified `GSC_SITE_URL` property, and set `GOOGLE_SERVICE_ACCOUNT_KEY` to the JSON credentials object. Without it, structural audits still complete and are marked as “without GSC” in the activity log; no fake metrics are written.
 
@@ -55,4 +58,4 @@ The Content Queue will turn audit findings into assignable work for the SEO team
 
 ### Blogs
 
-Blogs is currently a “Coming soon” route. It will later manage keyword briefs, drafts, SEO review, scheduled publishing, and internal links to coaching and branch pages.
+The Blogs workspace is an **admin CMS** in this dashboard. Editors write with TipTap (inline selection toolbar, alignment, images), and posts are stored in the **SEO audit** Supabase project (`blogs` + `blog-media`). **mentoracity.com reads published posts** for the public site — this app does not serve public blog pages. See [`docs/blogs.md`](docs/blogs.md).

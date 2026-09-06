@@ -100,7 +100,16 @@ Version insert failures never fail the production SEO write.
 - **Sidebar** → **SEO versions** (`/seo-versions`) — activity chart, field breakdown, filterable history, restore.
 - **SEO Sheet** → section **G · Version history** — retention alert, compact table, preview/restore, link to the dashboard filtered by entity.
 
-Deep link: `/seo-versions?entity_type=branch&entity_id=<uuid>`.
+## Entity types
+
+| `entity_type` | Live data | Version `entity_id` |
+|---------------|-----------|---------------------|
+| `center` / `branch` | Production `metadata.seo` | Coaching row UUID |
+| `page` | Production `coaching_seo_overrides` | Override row UUID (`entity_name` = path) |
+
+Page compare/restore is documented in [page-seo.md](page-seo.md).
+
+Deep link: `/seo-versions?entity_type=branch&entity_id=<uuid>` (or `entity_type=page&entity_id=<override-uuid>`).
 
 ### Compare (before / after)
 

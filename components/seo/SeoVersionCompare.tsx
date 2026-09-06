@@ -31,6 +31,7 @@ export function SeoVersionCompare({
     version.previous_seo,
     version.seo,
     version.changed_fields,
+    version.entity_type,
   );
   const changedOnly = rows.filter((row) => row.changed);
   const unchanged = rows.filter((row) => !row.changed);

@@ -7,28 +7,11 @@ import { toast } from "sonner";
 import { SeoPayload } from "@/lib/types";
 import { seoSchema, type SeoFormValues } from "@/lib/validations/seo.schema";
 import { OgImageUploader } from "@/components/seo/OgImageUploader";
+import { SeoFieldCounter as Counter } from "@/components/seo/SeoFieldCounter";
 import { SeoVersionHistoryPanel } from "@/components/seo/SeoVersionHistoryPanel";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Textarea } from "@/components/ui/textarea";
 
-function Counter({
-  value,
-  min,
-  max,
-}: {
-  value?: string;
-  min: number;
-  max: number;
-}) {
-  const count = value?.length ?? 0;
-  return (
-    <span
-      className={"counter " + (count < min || count > max ? "invalid" : "")}
-    >
-      {count} / {max}
-    </span>
-  );
-}
 
 function slugify(value: string) {
   return value
@@ -474,10 +457,7 @@ export function SeoSheet({
             <div className="field">
               <label>OG image</label>
               <OgImageUploader
-                centerId={
-                  entityType === "center" ? entityId : seo.canonical_url
-                }
-                branchId={entityId}
+                uploadKey={`${entityType === "center" ? entityId : "branch"}/og-${entityId}.webp`}
                 value={watch("ogImage")}
                 onChange={(url) =>
                   setValue("ogImage", url, { shouldDirty: true })
@@ -588,26 +568,27 @@ export function SeoSheet({
             entityId={entityId}
             entityType={entityType}
             onRestored={(restored) => {
-              onSaved?.(restored);
+              const payload = restored as unknown as import("@/lib/types").SeoPayload;
+              onSaved?.(payload);
               reset({
-                titleSource: restored.title.source,
-                titleCustom: restored.title.custom,
-                generatedTitle: restored.title.generated,
-                descriptionSource: restored.description.source,
-                descriptionCustom: restored.description.custom,
-                generatedDescription: restored.description.generated,
-                canonicalUrl: restored.canonical_url,
-                index: restored.robots.index,
-                follow: restored.robots.follow,
-                ogTitle: restored.og.title,
-                ogDescription: restored.og.description,
-                twitterTitle: restored.twitter.title,
-                twitterDescription: restored.twitter.description,
-                ogImage: restored.og.image,
+                titleSource: payload.title.source,
+                titleCustom: payload.title.custom,
+                generatedTitle: payload.title.generated,
+                descriptionSource: payload.description.source,
+                descriptionCustom: payload.description.custom,
+                generatedDescription: payload.description.generated,
+                canonicalUrl: payload.canonical_url,
+                index: payload.robots.index,
+                follow: payload.robots.follow,
+                ogTitle: payload.og.title,
+                ogDescription: payload.og.description,
+                twitterTitle: payload.twitter.title,
+                twitterDescription: payload.twitter.description,
+                ogImage: payload.og.image,
               });
-              setSlug(slugFromCanonical(restored.canonical_url));
-              setSchema(restored.schema);
-              setSchemaText(JSON.stringify(restored.schema, null, 2));
+              setSlug(slugFromCanonical(payload.canonical_url));
+              setSchema(payload.schema);
+              setSchemaText(JSON.stringify(payload.schema, null, 2));
               setSchemaError(null);
               setSchemaMode("read");
             }}

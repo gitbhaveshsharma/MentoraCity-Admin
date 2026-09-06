@@ -7,10 +7,12 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 const logo = "https://ixhlpassuqmqpzpumkuw.supabase.co/storage/v1/object/public/mentoracity-logo/mentoracity_logo_vr.webp";
 const items = [
   { href: "/coachings", icon: "◈", label: "Coaching centers" },
+  { href: "/pages", icon: "▥", label: "Pages" },
+  { href: "/sitemap", icon: "⧉", label: "Sitemap" },
   { href: "/seo-audit", icon: "◌", label: "SEO audit" },
   { href: "/seo-versions", icon: "⟳", label: "SEO versions" },
   { href: "/content-queue", icon: "◫", label: "Content queue" },
-  { href: "/blogs", icon: "▤", label: "Blogs", soon: true },
+  { href: "/blogs", icon: "▤", label: "Blogs" },
 ];
 
 type SidebarLinkProps = { href: string; icon: string; label: string; active: boolean; soon?: boolean };

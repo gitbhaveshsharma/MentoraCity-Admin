@@ -11,4 +11,16 @@ export async function middleware(request: NextRequest) {
   return response;
 }
 
-export const config = { matcher: ["/coachings/:path*"] };
+export const config = {
+  matcher: [
+    "/coachings/:path*",
+    "/pages/:path*",
+    "/sitemap/:path*",
+    "/seo-audit/:path*",
+    "/seo-versions/:path*",
+    "/content-queue/:path*",
+    "/blogs",
+    "/blogs/:path*",
+    "/settings/:path*",
+  ],
+};

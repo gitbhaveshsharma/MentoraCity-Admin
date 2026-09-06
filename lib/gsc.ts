@@ -1,4 +1,5 @@
 import { google, searchconsole_v1 } from "googleapis";
+import { auditPropertyHost as resolveAuditPropertyHost } from "@/lib/seo/site";
 
 export type GscRow = { keys?: string[]; clicks?: number; impressions?: number; ctr?: number; position?: number };
 type ServiceAccountCredentials = { client_email: string; private_key: string; project_id?: string };
@@ -30,10 +31,7 @@ export const searchconsole = google.searchconsole({ version: "v1", auth });
 
 export function gscConfigured() { return Boolean(credentials && siteUrl()); }
 export function auditPropertyHost() {
-  const configured = siteUrl() ?? process.env.PUBLIC_SITE_URL;
-  if (!configured) return null;
-  if (configured.startsWith("sc-domain:")) return configured.slice("sc-domain:".length).toLowerCase().replace(/^www\./, "");
-  try { return new URL(configured).hostname.toLowerCase().replace(/^www\./, ""); } catch { return null; }
+  return resolveAuditPropertyHost();
 }
 
 export function validateAuditPageUrl(pageUrl: string) {
@@ -88,4 +86,27 @@ export async function inspectUrl(pageUrl: string) {
   if (!gscConfigured()) return null;
   const response = await searchconsole.urlInspection.index.inspect({ requestBody: { inspectionUrl: pageUrl, siteUrl: siteUrl()! } });
   return response.data as searchconsole_v1.Schema$InspectUrlIndexResponse;
+}
+
+export type ListedSitemap = {
+  path: string;
+  lastSubmitted: string | null;
+  isPending: boolean;
+  isSitemapsIndex: boolean;
+  errors: string | null;
+  warnings: string | null;
+};
+
+/** Lists sitemaps submitted to the configured Search Console property. */
+export async function listSitemaps(): Promise<ListedSitemap[]> {
+  if (!gscConfigured()) return [];
+  const response = await searchconsole.sitemaps.list({ siteUrl: siteUrl()! });
+  return (response.data.sitemap ?? []).map((item) => ({
+    path: item.path ?? "",
+    lastSubmitted: item.lastSubmitted ?? null,
+    isPending: Boolean(item.isPending),
+    isSitemapsIndex: Boolean(item.isSitemapsIndex),
+    errors: item.errors != null ? String(item.errors) : null,
+    warnings: item.warnings != null ? String(item.warnings) : null,
+  })).filter((item) => item.path);
 }
