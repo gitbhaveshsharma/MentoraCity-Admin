@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isAdmin } from "@/lib/auth/admin";
 import { applySeoToProduction, loadProductionSeoEntity } from "@/lib/seo/apply";
+import { upsertOverrideFromSnapshot } from "@/lib/seo/pages/overrides";
 import { getSeoVersionById, recordSeoVersion } from "@/lib/seo/versions";
 
 export async function POST(request: Request) {
@@ -33,6 +34,29 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Version not found or expired" }, { status: 404 });
   }
 
+  if (snapshot.entity_type === "page") {
+    try {
+      const override = await upsertOverrideFromSnapshot(snapshot.seo, {
+        userId: user.id,
+        restoredFromId: snapshot.id,
+      });
+      return NextResponse.json({
+        override,
+        seo: snapshot.seo,
+        restored_from: snapshot.id,
+      });
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : "Could not restore page SEO" },
+        { status: 500 },
+      );
+    }
+  }
+
+  if (snapshot.entity_type !== "center" && snapshot.entity_type !== "branch") {
+    return NextResponse.json({ error: "Unsupported entity type" }, { status: 400 });
+  }
+
   const loaded = await loadProductionSeoEntity(
     supabase,
     snapshot.entity_id,
@@ -42,7 +66,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: loaded.error }, { status: loaded.status });
   }
 
-  const seoPatch = { ...snapshot.seo } as Record<string, unknown>;
+  const seoPatch = { ...snapshot.seo };
   delete seoPatch.version;
 
   let result;

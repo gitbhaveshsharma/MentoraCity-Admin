@@ -24,9 +24,9 @@ export async function GET(request: Request) {
   const limit = Number(searchParams.get("limit") ?? 50);
   const offset = Number(searchParams.get("offset") ?? 0);
 
-  if (entityType && entityType !== "center" && entityType !== "branch") {
+  if (entityType && entityType !== "center" && entityType !== "branch" && entityType !== "page") {
     return NextResponse.json(
-      { error: "entity_type must be center or branch" },
+      { error: "entity_type must be center, branch, or page" },
       { status: 400 },
     );
   }

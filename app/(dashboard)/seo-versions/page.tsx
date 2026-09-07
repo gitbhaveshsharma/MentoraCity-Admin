@@ -8,7 +8,6 @@ export default function SeoVersionsPage() {
         <main className="content">
           <div className="page-head">
             <div>
-              <span className="badge badge-source">SEO operations</span>
               <h1 className="page-title" style={{ marginTop: 9 }}>
                 SEO versions
               </h1>

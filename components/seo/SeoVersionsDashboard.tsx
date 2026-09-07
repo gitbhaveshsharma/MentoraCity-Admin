@@ -309,7 +309,6 @@ export function SeoVersionsDashboard() {
     <main className="content versions-page">
       <div className="page-head">
         <div>
-          <span className="badge badge-source">SEO operations</span>
           <h1 className="page-title" style={{ marginTop: 9 }}>
             SEO versions
           </h1>
@@ -494,9 +493,11 @@ export function SeoVersionsDashboard() {
                     <Link
                       className="btn btn-ghost btn-sm"
                       href={
-                        version.entity_type === "center"
-                          ? `/coachings/${version.entity_id}`
-                          : `/coachings`
+                        version.entity_type === "page"
+                          ? `/pages?path=${encodeURIComponent(version.entity_name ?? "")}`
+                          : version.entity_type === "center"
+                            ? `/coachings/${version.entity_id}`
+                            : `/coachings`
                       }
                     >
                       Open

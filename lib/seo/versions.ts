@@ -1,8 +1,7 @@
 import { createAuditClient } from "@/lib/supabase/audit";
-import type { SeoPayload } from "@/lib/types";
 import {
   SEO_VERSION_RETENTION_DAYS,
-  asSeoPayload,
+  asVersionSnapshot,
   computeExpiresAt,
   diffSeoFields,
   summarizeChangedFields,
@@ -18,6 +17,7 @@ export {
   SEO_VERSION_RETENTION_DAYS,
   SEO_VERSION_TRACKED_FIELDS,
   asSeoPayload,
+  asVersionSnapshot,
   buildSeoVersionCompare,
   computeExpiresAt,
   daysUntilExpiry,
@@ -53,8 +53,8 @@ function toRow(raw: Record<string, unknown>): SeoVersionRow {
     entity_id: String(raw.entity_id),
     entity_name: (raw.entity_name as string | null) ?? null,
     version_number: Number(raw.version_number),
-    seo: asSeoPayload(raw.seo) ?? (raw.seo as SeoPayload),
-    previous_seo: asSeoPayload(raw.previous_seo),
+    seo: asVersionSnapshot(raw.seo) ?? {},
+    previous_seo: asVersionSnapshot(raw.previous_seo),
     changed_fields: Array.isArray(raw.changed_fields)
       ? raw.changed_fields.map(String)
       : [],
@@ -99,7 +99,7 @@ export async function recordSeoVersion(
       ? (input.previousSeo as Record<string, unknown>)
       : null;
   const next = input.seo as Record<string, unknown>;
-  const changedFields = diffSeoFields(previous, next);
+  const changedFields = diffSeoFields(previous, next, input.entityType);
   const versionNumber = Number(next.version ?? 1);
   const createdAt = new Date();
   const payload = {

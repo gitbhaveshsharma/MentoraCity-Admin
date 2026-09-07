@@ -10,7 +10,6 @@ import {
   type SeoVersionEntityType,
   type SeoVersionRow,
 } from "@/lib/seo/versions";
-import type { SeoPayload } from "@/lib/types";
 
 const dateTime = new Intl.DateTimeFormat("en-IN", {
   day: "numeric",
@@ -28,17 +27,23 @@ export function SeoVersionHistoryPanel({
   entityType,
   open,
   onRestored,
+  sectionTitle = "G · Version history",
 }: {
   entityId: string;
   entityType: SeoVersionEntityType;
   open: boolean;
-  onRestored: (seo: SeoPayload) => void;
+  onRestored: (payload: Record<string, unknown>) => void;
+  sectionTitle?: string;
 }) {
   const [versions, setVersions] = useState<SeoVersionRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [restoringId, setRestoringId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    if (!entityId) {
+      setVersions([]);
+      return;
+    }
     setLoading(true);
     try {
       const params = new URLSearchParams({
@@ -86,8 +91,11 @@ export function SeoVersionHistoryPanel({
           (await response.json().catch(() => null))?.error ?? "Restore failed",
         );
       }
-      const data = (await response.json()) as { seo: SeoPayload };
-      onRestored(data.seo);
+      const data = (await response.json()) as {
+        seo?: Record<string, unknown>;
+        override?: Record<string, unknown>;
+      };
+      onRestored(data.override ?? data.seo ?? version.seo);
       toast.success("SEO restored", {
         description: `Version ${version.version_number} applied. A new snapshot was recorded.`,
       });
@@ -105,7 +113,7 @@ export function SeoVersionHistoryPanel({
 
   return (
     <div className="form-section seo-version-section">
-      <h3>G · Version history</h3>
+      <h3>{sectionTitle}</h3>
       <Alert className="seo-version-alert">
         <AlertTitle>History expires after {SEO_VERSION_RETENTION_DAYS} days</AlertTitle>
         <AlertDescription>
@@ -115,7 +123,10 @@ export function SeoVersionHistoryPanel({
       </Alert>
 
       {loading && <p className="field-help">Loading history…</p>}
-      {!loading && versions.length === 0 && (
+      {!loading && !entityId && (
+        <p className="field-help">Save once to start version history for this page.</p>
+      )}
+      {!loading && entityId && versions.length === 0 && (
         <p className="field-help">No saved versions yet for this page.</p>
       )}
 

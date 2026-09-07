@@ -1,12 +1,13 @@
 import type { SeoPayload } from "@/lib/types";
+import { PAGE_SEO_TRACKED_FIELDS } from "@/lib/validations/page-seo.schema";
 
 /** Days SEO version snapshots are retained before automatic purge. */
 export const SEO_VERSION_RETENTION_DAYS = 30;
 
-export type SeoVersionEntityType = "center" | "branch";
+export type SeoVersionEntityType = "center" | "branch" | "page";
 export type SeoVersionSource = "manual" | "bulk" | "restore";
 
-/** Tracked top-level SEO fields used for diffs and analytics. */
+/** Tracked top-level SEO fields used for diffs and analytics (center/branch). */
 export const SEO_VERSION_TRACKED_FIELDS = [
   "title",
   "description",
@@ -25,8 +26,9 @@ export type SeoVersionRow = {
   entity_id: string;
   entity_name: string | null;
   version_number: number;
-  seo: SeoPayload;
-  previous_seo: SeoPayload | null;
+  /** Center/branch SeoPayload or page override snapshot. */
+  seo: Record<string, unknown>;
+  previous_seo: Record<string, unknown> | null;
   changed_fields: string[];
   change_summary: string | null;
   source: SeoVersionSource;
@@ -80,21 +82,19 @@ function stableStringify(value: unknown): string {
   return `{${entries.map(([key, entry]) => `${JSON.stringify(key)}:${stableStringify(entry)}`).join(",")}}`;
 }
 
-function fieldValue(
-  seo: Record<string, unknown> | null | undefined,
-  field: SeoVersionTrackedField,
-): unknown {
-  if (!seo) return undefined;
-  return seo[field];
+function trackedFieldsFor(entityType?: SeoVersionEntityType | null): readonly string[] {
+  return entityType === "page" ? PAGE_SEO_TRACKED_FIELDS : SEO_VERSION_TRACKED_FIELDS;
 }
 
 /** Returns which tracked SEO fields differ between two payloads. */
 export function diffSeoFields(
   previous: Record<string, unknown> | null | undefined,
   next: Record<string, unknown> | null | undefined,
-): SeoVersionTrackedField[] {
-  return SEO_VERSION_TRACKED_FIELDS.filter(
-    (field) => stableStringify(fieldValue(previous, field)) !== stableStringify(fieldValue(next, field)),
+  entityType?: SeoVersionEntityType | null,
+): string[] {
+  return trackedFieldsFor(entityType).filter(
+    (field) =>
+      stableStringify(previous?.[field]) !== stableStringify(next?.[field]),
   );
 }
 
@@ -121,11 +121,17 @@ export function asSeoPayload(value: unknown): SeoPayload | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const seo = value as SeoPayload;
   if (typeof seo.version !== "number") return null;
+  if (!seo.title || !seo.description) return null;
   return seo;
 }
 
+export function asVersionSnapshot(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
 export type SeoFieldCompareRow = {
-  field: SeoVersionTrackedField;
+  field: string;
   changed: boolean;
   before: string;
   after: string;
@@ -133,11 +139,18 @@ export type SeoFieldCompareRow = {
 
 function formatSeoFieldValue(
   seo: Record<string, unknown> | null | undefined,
-  field: SeoVersionTrackedField,
+  field: string,
+  entityType?: SeoVersionEntityType | null,
 ): string {
   if (!seo) return "—";
   const value = seo[field];
   if (value == null) return "—";
+
+  if (entityType === "page") {
+    if (Array.isArray(value)) return value.join(", ") || "—";
+    if (typeof value === "boolean") return String(value);
+    return String(value) || "—";
+  }
 
   if (field === "title" || field === "description") {
     const block = value as {
@@ -145,12 +158,14 @@ function formatSeoFieldValue(
       custom?: string | null;
       generated?: string;
     };
-    const text =
-      block.source === "custom" && block.custom?.trim()
-        ? block.custom
-        : (block.generated ?? "");
-    const source = block.source ?? "generated";
-    return text ? `[${source}] ${text}` : `[${source}] —`;
+    if (block && typeof block === "object" && ("source" in block || "generated" in block)) {
+      const text =
+        block.source === "custom" && block.custom?.trim()
+          ? block.custom
+          : (block.generated ?? "");
+      const source = block.source ?? "generated";
+      return text ? `[${source}] ${text}` : `[${source}] —`;
+    }
   }
 
   if (field === "canonical_url") return String(value);
@@ -166,16 +181,18 @@ function formatSeoFieldValue(
       description?: string;
       image?: string;
     };
-    return [
-      social.title ? `title: ${social.title}` : null,
-      social.description ? `description: ${social.description}` : null,
-      social.image ? `image: ${social.image}` : null,
-    ]
-      .filter(Boolean)
-      .join("\n") || "—";
+    return (
+      [
+        social.title ? `title: ${social.title}` : null,
+        social.description ? `description: ${social.description}` : null,
+        social.image ? `image: ${social.image}` : null,
+      ]
+        .filter(Boolean)
+        .join("\n") || "—"
+    );
   }
 
-  if (field === "schema") {
+  if (field === "schema" || typeof value === "object") {
     try {
       return JSON.stringify(value, null, 2);
     } catch {
@@ -183,11 +200,7 @@ function formatSeoFieldValue(
     }
   }
 
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
-  }
+  return String(value);
 }
 
 /** Builds a before/after compare table for a version snapshot. */
@@ -195,16 +208,16 @@ export function buildSeoVersionCompare(
   previous: Record<string, unknown> | null | undefined,
   next: Record<string, unknown> | null | undefined,
   changedFields?: string[] | null,
+  entityType?: SeoVersionEntityType | null,
 ): SeoFieldCompareRow[] {
+  const fields = trackedFieldsFor(entityType);
   const changed = new Set(
-    changedFields?.length
-      ? changedFields
-      : diffSeoFields(previous, next),
+    changedFields?.length ? changedFields : diffSeoFields(previous, next, entityType),
   );
-  return SEO_VERSION_TRACKED_FIELDS.map((field) => ({
+  return fields.map((field) => ({
     field,
     changed: changed.has(field),
-    before: formatSeoFieldValue(previous, field),
-    after: formatSeoFieldValue(next, field),
+    before: formatSeoFieldValue(previous, field, entityType),
+    after: formatSeoFieldValue(next, field, entityType),
   }));
 }
