@@ -646,3 +646,17 @@ body:has(.table-card) .page-head > .btn-primary { display: none; }
 @media (max-width: 960px) {
   .blog-editor-layout { grid-template-columns: 1fr; }
 }
+
+.inspect-row-actions { display:flex; flex-wrap:wrap; gap:6px; justify-content:flex-end; }
+.inspect-status-row { display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+.inspect-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:16px; }
+.inspect-score-row { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; margin-top:14px; }
+.inspect-score { padding:12px; border-radius:9px; background:var(--color-muted); }
+.inspect-score span { display:block; color:var(--color-muted-foreground); font-size:10px; }
+.inspect-score b { display:block; margin-top:6px; font-size:20px; letter-spacing:-.04em; }
+.inspect-screenshot { margin:16px 0 0; }
+.inspect-screenshot img { display:block; width:100%; border:1px solid var(--line); border-radius:10px; background:var(--color-muted); }
+.inspect-screenshot figcaption { margin-top:7px; color:var(--color-muted-foreground); font-size:11px; }
+@media (max-width: 640px) {
+  .inspect-score-row { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}

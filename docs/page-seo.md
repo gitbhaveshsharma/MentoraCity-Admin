@@ -17,6 +17,7 @@ Apply these on the **audit** project (`SEO_AUDIT_SUPABASE_URL`):
 - `supabase/migrations/20260828200000_seo_page.sql`
 - `supabase/migrations/20260906000000_coaching_seo_overrides_og_image.sql`
 - `supabase/migrations/20260906000000_seo_versions_allow_page.sql`
+- `supabase/migrations/20260916000000_seo_url_inspections.sql`
 
 ```bash
 supabase link --project-ref <audit-project-ref>
@@ -40,7 +41,10 @@ Helpers: `lib/seo/pages/path.ts`.
 |--------|-------|------|
 | GET | `/api/pages` | Overview: sitemap paths + overrides + GSC + latest page audit |
 | POST | `/api/pages/sync` | Refresh overview (re-fetch sitemap + GSC) |
-| GET | `/api/pages/sitemap` | GSC submitted sitemaps + parsed URL inventory |
+| GET | `/api/pages/sitemap` | GSC submitted sitemaps + parsed URL inventory + last index inspection |
+| POST | `/api/pages/inspect` | GSC URL Inspection + optional PageSpeed live test (screenshot, scores) |
+| POST | `/api/pages/inspect/batch` | Index status for up to 20 URLs (no live test) |
+| POST | `/api/pages/index-request` | Google Indexing API `URL_UPDATED` notification |
 | GET | `/api/pages/by-path?path=` | Override or scraped defaults for the sheet |
 | PUT | `/api/pages/override` | Validate + upsert override, version, audit target |
 

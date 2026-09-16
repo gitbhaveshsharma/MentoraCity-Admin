@@ -10,6 +10,7 @@ import {
   resolveSiteSitemapUrls,
   urlsToPathRows,
 } from "@/lib/seo/pages/sitemap";
+import { listInspectionsByUrls } from "@/lib/seo/pages/inspections";
 import type { PageOverviewRow, PageSitemapPayload } from "@/lib/seo/pages/types";
 import {
   PAGE_CACHE_KEYS,
@@ -341,9 +342,13 @@ export async function buildPageOverview(options: {
   return { ...built, cache: "miss" };
 }
 
+type CachedSitemapPayload = Omit<PageSitemapPayload, "urls"> & {
+  urls: Array<{ path: string; page_url: string; has_override: boolean }>;
+};
+
 async function buildSitemapPayloadUncached(options: {
   force?: boolean;
-}): Promise<PageSitemapPayload> {
+}): Promise<CachedSitemapPayload> {
   const [{ origin, pageUrls }, sitemaps, overrides] = await Promise.all([
     resolveSiteSitemapUrls({ force: options.force }),
     loadGscSitemapEntries({ force: options.force }),
@@ -362,14 +367,28 @@ async function buildSitemapPayloadUncached(options: {
   };
 }
 
+async function withInspections(payload: CachedSitemapPayload): Promise<PageSitemapPayload> {
+  const inspections = await listInspectionsByUrls(payload.urls.map((row) => row.page_url));
+  return {
+    ...payload,
+    urls: payload.urls.map((row) => ({
+      ...row,
+      inspection: inspections.get(row.page_url) ?? null,
+    })),
+  };
+}
+
 export async function buildSitemapPayload(options: {
   force?: boolean;
 } = {}): Promise<PageSitemapPayload & { cache: "hit" | "miss" }> {
   if (!options.force) {
-    const cached = readServerCache<PageSitemapPayload>(
+    const cached = readServerCache<CachedSitemapPayload>(
       PAGE_CACHE_KEYS.sitemapPayload,
     );
-    if (cached) return { ...cached, cache: "hit" };
+    if (cached) {
+      const hydrated = await withInspections(cached);
+      return { ...hydrated, cache: "hit" };
+    }
   }
 
   const payload = await buildSitemapPayloadUncached({
@@ -380,7 +399,8 @@ export async function buildSitemapPayload(options: {
     payload,
     PAGE_CACHE_TTL.sitemapPayload,
   );
-  return { ...payload, cache: "miss" };
+  const hydrated = await withInspections(payload);
+  return { ...hydrated, cache: "miss" };
 }
 
 export function bumpPageSeoCachesAfterOverrideWrite(): void {

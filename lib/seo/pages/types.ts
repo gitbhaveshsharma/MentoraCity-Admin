@@ -62,9 +62,46 @@ export type GscSitemapEntry = {
   warnings: string | null;
 };
 
+export type UrlIndexStatus = "INDEXED" | "NOT_INDEXED" | "EXCLUDED" | "ERROR" | "UNKNOWN";
+
+export type UrlInspectionRecord = {
+  page_url: string;
+  path: string;
+  index_status: UrlIndexStatus;
+  coverage_state: string | null;
+  verdict: string | null;
+  last_crawled_at: string | null;
+  crawl_allowed: boolean | null;
+  indexing_allowed: boolean | null;
+  canonical_google: string | null;
+  robots_index: boolean | null;
+  page_fetch_state: string | null;
+  live_status: string | null;
+  live_http_status: number | null;
+  performance_score: number | null;
+  seo_score: number | null;
+  accessibility_score: number | null;
+  screenshot_data_url: string | null;
+  inspected_at: string | null;
+  live_tested_at: string | null;
+  index_requested_at: string | null;
+  index_request_type: string | null;
+  index_notify_time: string | null;
+  index_request_error: string | null;
+  gsc_error: string | null;
+  live_error: string | null;
+};
+
+export type SitemapUrlRow = {
+  path: string;
+  page_url: string;
+  has_override: boolean;
+  inspection: UrlInspectionRecord | null;
+};
+
 export type PageSitemapPayload = {
   sitemaps: GscSitemapEntry[];
-  urls: Array<{ path: string; page_url: string; has_override: boolean }>;
+  urls: SitemapUrlRow[];
   origin: string | null;
   synced_at: string;
 };

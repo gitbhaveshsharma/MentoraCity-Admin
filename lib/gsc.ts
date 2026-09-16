@@ -26,8 +26,17 @@ function loadCredentials(): ServiceAccountCredentials | undefined {
 }
 const credentials = loadCredentials();
 
-const auth = new google.auth.GoogleAuth({ credentials, scopes: ["https://www.googleapis.com/auth/webmasters.readonly"] });
+const auth = new google.auth.GoogleAuth({
+  credentials,
+  scopes: [
+    "https://www.googleapis.com/auth/webmasters.readonly",
+    "https://www.googleapis.com/auth/webmasters",
+    "https://www.googleapis.com/auth/indexing",
+  ],
+});
 export const searchconsole = google.searchconsole({ version: "v1", auth });
+export const indexing = google.indexing({ version: "v3", auth });
+export const pagespeed = google.pagespeedonline({ version: "v5", auth });
 
 export function gscConfigured() { return Boolean(credentials && siteUrl()); }
 export function auditPropertyHost() {
@@ -86,6 +95,79 @@ export async function inspectUrl(pageUrl: string) {
   if (!gscConfigured()) return null;
   const response = await searchconsole.urlInspection.index.inspect({ requestBody: { inspectionUrl: pageUrl, siteUrl: siteUrl()! } });
   return response.data as searchconsole_v1.Schema$InspectUrlIndexResponse;
+}
+
+export type ParsedIndexInspection = {
+  index_status: "INDEXED" | "NOT_INDEXED" | "EXCLUDED" | "ERROR" | "UNKNOWN";
+  coverage_state: string | null;
+  verdict: string | null;
+  last_crawled_at: string | null;
+  crawl_allowed: boolean | null;
+  indexing_allowed: boolean | null;
+  canonical_google: string | null;
+  robots_index: boolean | null;
+  page_fetch_state: string | null;
+};
+
+export function parseInspectResult(
+  inspection: searchconsole_v1.Schema$InspectUrlIndexResponse | null,
+): ParsedIndexInspection {
+  const index = inspection?.inspectionResult?.indexStatusResult;
+  if (!index) {
+    return {
+      index_status: "UNKNOWN",
+      coverage_state: null,
+      verdict: null,
+      last_crawled_at: null,
+      crawl_allowed: null,
+      indexing_allowed: null,
+      canonical_google: null,
+      robots_index: null,
+      page_fetch_state: null,
+    };
+  }
+
+  const coverage = index.coverageState ?? null;
+  const verdict = index.verdict ?? null;
+  const coverageLower = (coverage ?? "").toLowerCase();
+  const indexingState = index.indexingState ?? "";
+  const robotsTxt = index.robotsTxtState ?? "";
+
+  let index_status: ParsedIndexInspection["index_status"] = "NOT_INDEXED";
+  if (/url is unknown/i.test(coverageLower)) index_status = "NOT_INDEXED";
+  else if (/not indexed|discovered|crawled - currently not/i.test(coverageLower)) index_status = "NOT_INDEXED";
+  else if (/excluded|noindex|blocked by/i.test(coverageLower) || indexingState.includes("BLOCKED") || robotsTxt === "DISALLOWED") {
+    index_status = "EXCLUDED";
+  } else if (verdict === "PASS" || (coverageLower.includes("indexed") && !coverageLower.includes("not indexed"))) {
+    index_status = "INDEXED";
+  }
+
+  const robotsIndex =
+    indexingState === "INDEXING_ALLOWED"
+      ? true
+      : indexingState.includes("BLOCKED")
+        ? false
+        : null;
+
+  return {
+    index_status,
+    coverage_state: coverage,
+    verdict,
+    last_crawled_at: index.lastCrawlTime ?? null,
+    crawl_allowed: index.robotsTxtState === "ALLOWED" || index.pageFetchState === "SUCCESSFUL",
+    indexing_allowed: indexingState === "INDEXING_ALLOWED",
+    canonical_google: index.googleCanonical ?? null,
+    robots_index: robotsIndex,
+    page_fetch_state: index.pageFetchState ?? null,
+  };
+}
+
+export async function requestUrlIndexing(pageUrl: string) {
+  if (!gscConfigured()) throw new Error(gscConfigurationError() ?? "Search Console is not configured");
+  const response = await indexing.urlNotifications.publish({
+    requestBody: { url: pageUrl, type: "URL_UPDATED" },
+  });
+  return response.data;
 }
 
 export type ListedSitemap = {
