@@ -14,6 +14,8 @@ import {
   PAGE_CACHE_KEYS,
   PAGE_CACHE_TTL,
   getOrSetServerCache,
+  invalidateServerCache,
+  writeServerCache,
 } from "@/lib/serverCache";
 
 import { createAuditClient } from "@/lib/supabase/audit";
@@ -159,7 +161,7 @@ async function loadFallbackPageUrls(origin: string | null): Promise<string[]> {
 
   if (gscConfigured()) {
     try {
-      const analytics = await fetchSearchAnalytics(undefined, 28, ["page"]);
+      const analytics = await fetchSearchAnalytics(undefined, 90, ["page"]);
       for (const row of analytics?.rows ?? []) {
         const pageUrl = row.keys?.[0];
         if (pageUrl) urls.add(pageUrl);
@@ -202,10 +204,10 @@ async function loadSiteSitemapUrlsUncached(): Promise<{
     if (pageUrls.size >= MAX_SITEMAP_URLS) break;
   }
 
-  // Fallback: If sitemap XML was unreachable or returned 0 URLs (e.g. Cloudflare challenge on Vercel IPs)
-  if (pageUrls.size === 0) {
+  // Fallback: If sitemap XML was unreachable or returned fewer than 50 URLs (e.g. Cloudflare challenge on Vercel IPs)
+  if (pageUrls.size < 50) {
     console.warn(
-      `[sitemap] No URLs collected from XML sitemaps (${sourceSitemaps.join(", ")}). Loading fallback discovered pages.`,
+      `[sitemap] Only ${pageUrls.size} URLs collected from XML sitemaps (${sourceSitemaps.join(", ")}). Loading fallback discovered pages.`,
     );
     const fallbackUrls = await loadFallbackPageUrls(origin);
     for (const url of fallbackUrls) pageUrls.add(url);
@@ -216,6 +218,22 @@ async function loadSiteSitemapUrlsUncached(): Promise<{
     pageUrls: Array.from(pageUrls).slice(0, MAX_SITEMAP_URLS),
     sourceSitemaps,
   };
+}
+
+/** Allows client-side discovered sitemap URLs (from direct browser CORS fetch) to update server cache. */
+export async function syncClientSitemapUrls(urls: string[]) {
+  const origin = siteOrigin();
+  const uniqueUrls = Array.from(new Set(urls)).slice(0, MAX_SITEMAP_URLS);
+  writeServerCache(
+    PAGE_CACHE_KEYS.sitemapUrls,
+    {
+      origin,
+      pageUrls: uniqueUrls,
+      sourceSitemaps: defaultSitemapCandidates(origin),
+    },
+    PAGE_CACHE_TTL.sitemapUrls,
+  );
+  invalidateServerCache(PAGE_CACHE_KEYS.sitemapPayload);
 }
 
 export async function resolveSiteSitemapUrls(options: { force?: boolean } = {}) {

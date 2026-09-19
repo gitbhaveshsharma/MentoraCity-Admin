@@ -69,7 +69,7 @@ export function SitemapDashboard() {
   const load = useCallback(async (force = false) => {
     if (!force) {
       const cached = readClientCache<PageSitemapPayload>(SITEMAP_CLIENT_CACHE_KEY);
-      if (cached) {
+      if (cached && cached.urls.length >= 500) {
         setData(cached);
         setLoading(false);
       }
@@ -79,6 +79,45 @@ export function SitemapDashboard() {
     );
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error ?? "Could not load sitemap");
+
+    // Client-side sitemap check:
+    // If the server returned fewer than 600 URLs (e.g. Cloudflare blocked the datacenter IP on Vercel),
+    // fetch the live sitemap directly from the browser (which has CORS permission and bypasses Cloudflare).
+    const sitemapTarget =
+      payload.sitemaps?.[0]?.path ||
+      (payload.origin ? `${payload.origin}/sitemap.xml` : "https://mentoracity.com/sitemap.xml");
+
+    if (payload.urls.length < 600 && sitemapTarget) {
+      try {
+        const xmlRes = await fetch(sitemapTarget, { cache: "no-store" });
+        if (xmlRes.ok) {
+          const xmlText = await xmlRes.text();
+          const matches = xmlText.match(/<loc[^>]*>([\s\S]*?)<\/loc>/gi);
+          if (matches && matches.length > payload.urls.length) {
+            const locs = matches
+              .map((m) => m.replace(/<\/?loc[^>]*>/gi, "").trim())
+              .filter((u) => /^https?:\/\//i.test(u));
+
+            if (locs.length > payload.urls.length) {
+              const syncRes = await fetch("/api/pages/sitemap", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ urls: locs }),
+              });
+              if (syncRes.ok) {
+                const fullPayload = await syncRes.json();
+                setData(fullPayload);
+                writeClientCache(SITEMAP_CLIENT_CACHE_KEY, fullPayload, 5 * 60_000);
+                return;
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("[sitemap] client sitemap fetch fallback:", err);
+      }
+    }
+
     setData(payload);
     writeClientCache(SITEMAP_CLIENT_CACHE_KEY, payload, 5 * 60_000);
   }, []);
