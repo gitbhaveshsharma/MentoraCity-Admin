@@ -2,7 +2,11 @@ import { createAuditClient } from "@/lib/supabase/audit";
 import { absoluteUrlToPath } from "@/lib/seo/pages/path";
 import type { LivePageTest } from "@/lib/seo/pages/live-test";
 import type { UrlInspectionRecord } from "@/lib/seo/pages/types";
-import type { ParsedIndexInspection } from "@/lib/gsc";
+import {
+  fetchSearchAnalytics,
+  gscConfigured,
+  type ParsedIndexInspection,
+} from "@/lib/gsc";
 
 function auditDb() {
   return createAuditClient();
@@ -54,6 +58,97 @@ export async function listInspectionsByUrls(pageUrls: string[]): Promise<Map<str
       for (const row of data ?? []) {
         const record = rowFromDb(row as Record<string, unknown>);
         map.set(record.page_url, record);
+      }
+    }
+
+    // 2. Enrich uninspected URLs from seo_audit_gsc_index joined by audits
+    const missingUrls = pageUrls.filter((u) => !map.has(u));
+    if (missingUrls.length > 0) {
+      try {
+        const { data: audits } = await db
+          .from("seo_audits")
+          .select("id,entity_id,page_url")
+          .in("page_url", missingUrls.slice(0, 500));
+
+        if (audits && audits.length > 0) {
+          const entityIds = Array.from(new Set(audits.map((a) => a.entity_id)));
+          const { data: gscRows } = await db
+            .from("seo_audit_gsc_index")
+            .select("entity_id,canonical_google,index_status,coverage_state,last_crawled_at,crawl_allowed,indexing_allowed")
+            .in("entity_id", entityIds)
+            .order("captured_at", { ascending: false });
+
+          const gscByEntity = new Map<string, Record<string, unknown>>();
+          for (const row of gscRows ?? []) {
+            if (!gscByEntity.has(String(row.entity_id))) {
+              gscByEntity.set(String(row.entity_id), row as Record<string, unknown>);
+            }
+          }
+
+          for (const audit of audits) {
+            const gsc = gscByEntity.get(audit.entity_id);
+            if (gsc && !map.has(audit.page_url)) {
+              map.set(
+                audit.page_url,
+                rowFromDb({
+                  page_url: audit.page_url,
+                  path: absoluteUrlToPath(audit.page_url),
+                  index_status: (gsc.index_status as string) ?? "UNKNOWN",
+                  coverage_state: gsc.coverage_state ?? null,
+                  verdict: gsc.index_status === "INDEXED" ? "PASS" : null,
+                  last_crawled_at: gsc.last_crawled_at ?? null,
+                  crawl_allowed: gsc.crawl_allowed ?? null,
+                  indexing_allowed: gsc.indexing_allowed ?? null,
+                  canonical_google: gsc.canonical_google ?? audit.page_url,
+                  robots_index: gsc.indexing_allowed ?? true,
+                  page_fetch_state: "SUCCESSFUL",
+                }),
+              );
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("[listInspectionsByUrls] audit enrichment fallback error:", err);
+      }
+    }
+
+    // 3. Enrich remaining URLs from GSC Search Analytics (pages with impressions are definitely indexed)
+    const stillMissing = pageUrls.filter((u) => !map.has(u));
+    if (stillMissing.length > 0 && gscConfigured()) {
+      try {
+        const analytics = await fetchSearchAnalytics(undefined, 28, ["page"]);
+        const impressionUrls = new Set<string>();
+        for (const row of analytics?.rows ?? []) {
+          const urlKey = row.keys?.[0];
+          if (urlKey && (row.impressions ?? 0) > 0) {
+            impressionUrls.add(urlKey);
+            // Also add path-normalized variations
+            impressionUrls.add(urlKey.replace(/\/+$/, ""));
+          }
+        }
+        for (const url of stillMissing) {
+          const trimmed = url.replace(/\/+$/, "");
+          if (impressionUrls.has(url) || impressionUrls.has(trimmed)) {
+            map.set(
+              url,
+              rowFromDb({
+                page_url: url,
+                path: absoluteUrlToPath(url),
+                index_status: "INDEXED",
+                coverage_state: "Submitted and indexed (Google Search)",
+                verdict: "PASS",
+                last_crawled_at: null,
+                crawl_allowed: true,
+                indexing_allowed: true,
+                canonical_google: url,
+                robots_index: true,
+                page_fetch_state: "SUCCESSFUL",
+              }),
+            );
+          }
+        }
+      } catch {
+        /* best effort */
       }
     }
   } catch {

@@ -62,15 +62,29 @@ export async function POST(request: Request) {
     return NextResponse.json({ inspection, notify_time: notifyTime });
   } catch (error) {
     const reported = reportGscError("Indexing API", error);
+    let userMessage = reported.message;
+
+    if (
+      userMessage.includes("has not been used in project") ||
+      userMessage.includes("accessNotConfigured") ||
+      userMessage.includes("disabled")
+    ) {
+      userMessage =
+        "The Google Web Search Indexing API is disabled in your Google Cloud project. Please enable it by visiting: https://console.developers.google.com/apis/api/indexing.googleapis.com/overview?project=828656455104 and ensure the service account (mentoracity-seo-bot@mentoracity.iam.gserviceaccount.com) is added as an Owner in Google Search Console.";
+    } else if (userMessage.includes("Permission denied") || userMessage.includes("ownership")) {
+      userMessage =
+        "Permission denied by Google Indexing API. The service account (mentoracity-seo-bot@mentoracity.iam.gserviceaccount.com) must be added as an Owner in Google Search Console for property sc-domain:mentoracity.com.";
+    }
+
     try {
       await markIndexRequested({
         pageUrl,
-        error: reported.message,
+        error: userMessage,
         inspectedBy: user.id,
       });
     } catch {
       /* ignore */
     }
-    return NextResponse.json({ error: reported.message }, { status: 502 });
+    return NextResponse.json({ error: userMessage }, { status: 502 });
   }
 }
