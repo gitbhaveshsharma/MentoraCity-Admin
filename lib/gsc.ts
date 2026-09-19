@@ -85,7 +85,7 @@ export async function fetchSearchAnalytics(pageUrl: string | undefined, days: nu
       type: "web",
       ...(dimensions.length ? { dimensions } : {}),
       ...(pageUrl ? { dimensionFilterGroups: [{ filters: [{ dimension: "page", expression: pageUrl }] }] } : {}),
-      rowLimit: 250,
+      rowLimit: 5000,
     },
   });
   return { rows: (response.data.rows ?? []) as GscRow[] };
