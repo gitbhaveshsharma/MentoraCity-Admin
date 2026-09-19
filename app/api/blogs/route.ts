@@ -19,13 +19,16 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const status = (searchParams.get("status") as BlogStatus | "all" | null) ?? "all";
   const search = searchParams.get("search") ?? undefined;
-  const page = Number(searchParams.get("page") ?? "1");
-  const pageSize = Number(searchParams.get("page_size") ?? "20");
+  const pageRaw = Number(searchParams.get("page") ?? "1");
+  const page = Number.isFinite(pageRaw) && pageRaw > 0 ? pageRaw : 1;
+  const pageSizeRaw = Number(searchParams.get("page_size") ?? "20");
+  const pageSize = Number.isFinite(pageSizeRaw) && pageSizeRaw > 0 ? Math.min(100, pageSizeRaw) : 20;
 
   try {
     const data = await listBlogs({ status, search, page, pageSize });
     return NextResponse.json(data);
   } catch (error) {
+    console.error("[api/blogs] GET failed:", error);
     return NextResponse.json(
       {
         error:

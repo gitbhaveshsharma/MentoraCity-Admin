@@ -16,15 +16,35 @@ import {
   getOrSetServerCache,
 } from "@/lib/serverCache";
 
+import { createAuditClient } from "@/lib/supabase/audit";
+import { fetchSearchAnalytics } from "@/lib/gsc";
+
 const MAX_SITEMAP_URLS = 2000;
-const FETCH_HEADERS = { "user-agent": "MentoraCity-SEO-Pages/1.0" };
+
+const BROWSER_HEADERS = {
+  "user-agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+  accept: "application/xml,text/xml,text/html;q=0.9,*/*;q=0.8",
+  "accept-language": "en-US,en;q=0.9",
+};
+
+const GOOGLEBOT_HEADERS = {
+  "user-agent":
+    "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
+  accept: "application/xml,text/xml,*/*;q=0.9",
+};
 
 function extractLocs(xml: string): string[] {
   const locs: string[] = [];
-  const pattern = /<loc[^>]*>\s*([^<\s]+)\s*<\/loc>/gi;
+  const pattern = /<loc[^>]*>([\s\S]*?)<\/loc>/gi;
   let match: RegExpExecArray | null;
   while ((match = pattern.exec(xml))) {
-    locs.push(match[1].trim());
+    let loc = match[1].trim();
+    const cdataMatch = /^<!\[CDATA\[([\s\S]*?)\]\]>$/i.exec(loc);
+    if (cdataMatch) loc = cdataMatch[1].trim();
+    if (loc && /^https?:\/\//i.test(loc)) {
+      locs.push(loc);
+    }
   }
   return locs;
 }
@@ -34,16 +54,43 @@ function isSitemapIndex(xml: string) {
 }
 
 async function fetchXml(url: string): Promise<string | null> {
-  try {
-    const response = await fetch(url, {
-      cache: "no-store",
-      headers: FETCH_HEADERS,
-    });
-    if (!response.ok) return null;
-    return await response.text();
-  } catch {
-    return null;
-  }
+  const tryFetch = async (headers: Record<string, string>) => {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 8000);
+      const response = await fetch(url, {
+        cache: "no-store",
+        headers,
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      if (!response.ok) {
+        console.warn(
+          `[sitemap] fetchXml returned HTTP ${response.status} for ${url}`,
+        );
+        return null;
+      }
+      return await response.text();
+    } catch (error) {
+      console.warn(
+        `[sitemap] fetchXml network error for ${url}:`,
+        error instanceof Error ? error.message : error,
+      );
+      return null;
+    }
+  };
+
+  // Attempt 1: Standard browser headers (avoids basic bot-block)
+  let text = await tryFetch(BROWSER_HEADERS);
+  if (text && text.includes("<loc")) return text;
+
+  // Attempt 2: Googlebot headers
+  text = await tryFetch(GOOGLEBOT_HEADERS);
+  if (text && text.includes("<loc")) return text;
+
+  // Attempt 3: Lightweight headers
+  text = await tryFetch({ "user-agent": "MentoraCity-SEO/1.0" });
+  return text && text.includes("<loc") ? text : null;
 }
 
 /** Recursively collect page URLs from a sitemap or sitemap index. */
@@ -76,6 +123,55 @@ export function defaultSitemapCandidates(origin: string | null): string[] {
   return [`${base}/sitemap.xml`, `${base}/sitemap_index.xml`, `${base}/sitemap-index.xml`];
 }
 
+/** Discovers URLs from database and GSC Search Analytics if XML sitemap fetching is blocked. */
+async function loadFallbackPageUrls(origin: string | null): Promise<string[]> {
+  const urls = new Set<string>();
+  if (!origin) return [];
+  const base = origin.replace(/\/+$/, "");
+  urls.add(`${base}/`);
+  urls.add(`${base}/coaching`);
+  urls.add(`${base}/blog`);
+  urls.add(`${base}/learn`);
+  urls.add(`${base}/about`);
+
+  try {
+    const auditDb = createAuditClient();
+    const [targets, overrides, blogs] = await Promise.all([
+      auditDb.from("seo_audit_targets").select("page_url").limit(1000),
+      auditDb.from("coaching_seo_overrides").select("path").limit(1000),
+      auditDb.from("blogs").select("slug").eq("status", "published").limit(500),
+    ]);
+    for (const t of targets.data ?? []) {
+      if (t.page_url) urls.add(String(t.page_url));
+    }
+    for (const o of overrides.data ?? []) {
+      if (o.path) {
+        const u = pathToAbsoluteUrl(String(o.path), origin);
+        if (u) urls.add(u);
+      }
+    }
+    for (const b of blogs.data ?? []) {
+      if (b.slug) urls.add(`${base}/blog/${b.slug}`);
+    }
+  } catch (err) {
+    console.warn("[sitemap] fallback url query error:", err);
+  }
+
+  if (gscConfigured()) {
+    try {
+      const analytics = await fetchSearchAnalytics(undefined, 28, ["page"]);
+      for (const row of analytics?.rows ?? []) {
+        const pageUrl = row.keys?.[0];
+        if (pageUrl) urls.add(pageUrl);
+      }
+    } catch {
+      /* best effort */
+    }
+  }
+
+  return Array.from(urls);
+}
+
 async function loadSiteSitemapUrlsUncached(): Promise<{
   origin: string | null;
   pageUrls: string[];
@@ -104,6 +200,15 @@ async function loadSiteSitemapUrlsUncached(): Promise<{
     const urls = await collectSitemapUrls(sitemapUrl);
     for (const url of urls) pageUrls.add(url);
     if (pageUrls.size >= MAX_SITEMAP_URLS) break;
+  }
+
+  // Fallback: If sitemap XML was unreachable or returned 0 URLs (e.g. Cloudflare challenge on Vercel IPs)
+  if (pageUrls.size === 0) {
+    console.warn(
+      `[sitemap] No URLs collected from XML sitemaps (${sourceSitemaps.join(", ")}). Loading fallback discovered pages.`,
+    );
+    const fallbackUrls = await loadFallbackPageUrls(origin);
+    for (const url of fallbackUrls) pageUrls.add(url);
   }
 
   return {

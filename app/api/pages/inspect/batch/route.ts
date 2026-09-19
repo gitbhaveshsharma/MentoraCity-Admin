@@ -38,40 +38,59 @@ export async function POST(request: Request) {
 
   const inspections: UrlInspectionRecord[] = [];
   const errors: Array<{ page_url: string; message: string }> = [];
+  const queue = [...parsed.data.page_urls];
+  const CONCURRENCY = 4;
 
-  for (const raw of parsed.data.page_urls) {
-    const pageUrl = new URL(raw).toString();
-    const propertyCheck = validateAuditPageUrl(pageUrl);
-    if (!propertyCheck.valid) {
-      errors.push({ page_url: pageUrl, message: propertyCheck.message ?? "Invalid URL" });
-      continue;
-    }
-    try {
-      const parsedInspect = parseInspectResult(await inspectUrl(pageUrl));
-      inspections.push(
-        await upsertInspection({
+  const worker = async () => {
+    while (queue.length > 0) {
+      const raw = queue.shift();
+      if (!raw) break;
+
+      let pageUrl: string;
+      try {
+        pageUrl = new URL(raw).toString();
+      } catch {
+        errors.push({ page_url: raw, message: "Invalid URL format" });
+        continue;
+      }
+
+      const propertyCheck = validateAuditPageUrl(pageUrl);
+      if (!propertyCheck.valid) {
+        errors.push({ page_url: pageUrl, message: propertyCheck.message ?? "Invalid URL" });
+        continue;
+      }
+
+      try {
+        const parsedInspect = parseInspectResult(await inspectUrl(pageUrl));
+        const saved = await upsertInspection({
           pageUrl,
           gsc: parsedInspect,
           inspectedBy: user.id,
-        }),
-      );
-    } catch (error) {
-      const reported = reportGscError("URL inspection", error);
-      errors.push({ page_url: pageUrl, message: reported.message });
-      try {
-        inspections.push(
-          await upsertInspection({
+        });
+        inspections.push(saved);
+      } catch (error) {
+        const reported = reportGscError("URL inspection", error);
+        errors.push({ page_url: pageUrl, message: reported.message });
+        try {
+          const errSaved = await upsertInspection({
             pageUrl,
             gsc: { ...parseInspectResult(null), index_status: "ERROR" },
             gscError: reported.message,
             inspectedBy: user.id,
-          }),
-        );
-      } catch {
-        /* storage optional */
+          });
+          inspections.push(errSaved);
+        } catch {
+          /* storage optional */
+        }
       }
     }
-  }
+  };
+
+  const workers = Array.from(
+    { length: Math.min(CONCURRENCY, parsed.data.page_urls.length) },
+    () => worker(),
+  );
+  await Promise.all(workers);
 
   return NextResponse.json({ inspections, errors });
 }

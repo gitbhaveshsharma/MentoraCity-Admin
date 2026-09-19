@@ -1,5 +1,3 @@
-import DOMPurify from "isomorphic-dompurify";
-
 const ALLOWED_TAGS = [
   "p",
   "br",
@@ -37,13 +35,46 @@ const ALLOWED_ATTR = [
   "height",
 ];
 
+type PurifyLike = {
+  sanitize: (html: string, options?: Record<string, unknown>) => string;
+};
+
+let purifierInstance: PurifyLike | null = null;
+
+function getPurifier(): PurifyLike | null {
+  if (purifierInstance) return purifierInstance;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const mod = require("isomorphic-dompurify");
+    purifierInstance = (mod.default ?? mod) as PurifyLike;
+  } catch (error) {
+    console.warn("[sanitize] isomorphic-dompurify not available, using fallback:", error);
+  }
+  return purifierInstance;
+}
+
 /** Sanitize TipTap HTML before persist / mentoracity render. */
 export function sanitizeBlogHtml(html: string): string {
-  return DOMPurify.sanitize(html || "", {
-    ALLOWED_TAGS,
-    ALLOWED_ATTR,
-    ALLOW_DATA_ATTR: true,
-  });
+  if (!html) return "";
+  const purifier = getPurifier();
+  if (purifier && typeof purifier.sanitize === "function") {
+    try {
+      return purifier.sanitize(html, {
+        ALLOWED_TAGS,
+        ALLOWED_ATTR,
+        ALLOW_DATA_ATTR: true,
+      });
+    } catch {
+      /* fallback below */
+    }
+  }
+
+  // Safe fallback to strip script/iframe tags if DOMPurify fails to load in serverless container
+  return html
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+    .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, "")
+    .replace(/javascript:[^"']+/gi, "")
+    .replace(/\son\w+\s*=\s*(['"]).*?\1/gi, "");
 }
 
 /** Plain-text excerpt helper from HTML when excerpt field is empty. */

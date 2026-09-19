@@ -394,11 +394,13 @@ export async function buildSitemapPayload(options: {
   const payload = await buildSitemapPayloadUncached({
     force: Boolean(options.force),
   });
-  writeServerCache(
-    PAGE_CACHE_KEYS.sitemapPayload,
-    payload,
-    PAGE_CACHE_TTL.sitemapPayload,
-  );
+  if (payload.urls.length > 0) {
+    writeServerCache(
+      PAGE_CACHE_KEYS.sitemapPayload,
+      payload,
+      PAGE_CACHE_TTL.sitemapPayload,
+    );
+  }
   const hydrated = await withInspections(payload);
   return { ...hydrated, cache: "miss" };
 }
